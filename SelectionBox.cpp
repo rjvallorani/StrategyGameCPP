@@ -81,7 +81,7 @@ void ASelectionBox::Start(FVector Position, const FRotator Rotation)
 	BoxSelect = true;
 }
 
-void ASelectionBox::End()
+void ASelectionBox::End(const bool bSelect, const bool bAddOnly)
 {
 	if (!SPlayer)
 	{
@@ -96,7 +96,15 @@ void ASelectionBox::End()
 	if (CenterInBox.Num() == 0)
 	{
 		// Handle selecting nothing
-		SPlayer->Handle_Selection(CenterInBox);
+		if (!bAddOnly)
+		{
+			SPlayer->Handle_Selection(nullptr);
+		}
+		SPlayer->Handle_Selection(nullptr);
+	}
+	else
+	{
+		bSelect ? SPlayer->Handle_Selection(CenterInBox) : SPlayer->Handle_DeSelection(CenterInBox);
 	}
 	InBox.Empty();
 	CenterInBox.Empty(); 

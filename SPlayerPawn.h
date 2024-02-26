@@ -3,10 +3,18 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "AIData.h"
+#include "InputActionValue.h"
+#include "SPlayerController.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "SPlayerPawn.generated.h"
+
+class ASelectionBox;
+class ASPlayerController;
+class UCameraComponent;
+class USpringArmComponent;
 
 UCLASS()
 class RTSGAME_API ASPlayerPawn : public APawn
@@ -30,61 +38,37 @@ protected:
 
 	UFUNCTION()
 	void GetTerrainPosition(FVector& TerrainPosition) const;
-
-	UFUNCTION()
-	void Forward(float AxisValue);
-
-	UFUNCTION()
-	void Right(float AxisValue);
-
-	UFUNCTION()
-	void Zoom(float AxisValue);
-
-	UFUNCTION()
-	void RotateRight();
-
-	UFUNCTION()
-	void RotateLeft();
-
-	UFUNCTION()
-	void EnableRotate();
-
-	UFUNCTION()
-	void DisableRotate();
-
-	UFUNCTION()
-	void RotateHorizontal(float AxisValue);
-
-	UFUNCTION()
-	void RotateVertical(float AxisValue);
+	
 
 	UFUNCTION()
 	void EdgeScroll();
 	
-	
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Camera")
-	float MoveSpeed = 50.0f;
+	float MoveSpeed;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Camera")
-	float EdgeScrollSpeed = 5.0f;
+	float EdgeScrollSpeed;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Camera")
-	float RotateSpeed = 2.0f;
+	float RotateSpeed;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Camera")
-	float RotatePitchMin = 20.0f;
+	float RotatePitchMin;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Camera")
-	float RotatePitchMax = 80.0f;
+	float RotatePitchMax;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Camera")
-	float ZoomSpeed = 20.0f;
+	float ZoomSpeed;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Camera")
-	float MinZoom = 500.0f;
+	float MinZoom;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Camera")
-	float MaxZoom = 4000.0f;
+	float MaxZoom;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Camera")
+	float Smoothing;
 
 private:
 	UFUNCTION()
@@ -108,6 +92,118 @@ private:
 	UPROPERTY()
 	float TargetZoom;
 
+	/* Mouse Input*/
+protected:
+
+	UFUNCTION()
+	AActor* GetSelectedObject();
+	
+	UFUNCTION()
+	void CreateSelectionBox();
+
 	UPROPERTY()
-	bool CanRotate;
+	ASPlayerController* SPlayer;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category= "Settings|Mouse")
+	TSubclassOf<ASelectionBox> SelectionBoxClass;
+
+	UPROPERTY()
+	ASelectionBox* SelectionBox;
+
+	UPROPERTY()
+	bool BoxSelect;
+
+	UPROPERTY()
+	FVector SelectHitLocation;
+
+	/** Command Functions **/
+	UFUNCTION()
+	FCommandData CreateCommandData(const ECommandType Type) const; 
+
+	UPROPERTY()
+	FVector CommandLocation;
+
+	/** End Command Functions **/
+
+	/** Enhanced Input**/
+
+	UFUNCTION()
+	void Move(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void Look(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void Rotate(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void Select(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void SelectHold(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void SelectEnd(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void Zoom(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void TestPlacement(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void SelectDoubleTap(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void CommandStart(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void Command(const FInputActionValue& Value);
+
+
+	/** Modifier Keys **/
+	UFUNCTION()
+	void Shift(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void Alt(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void Ctrl(const FInputActionValue& Value);
+
+
+	/** Placement **/
+	UFUNCTION()
+	void Place(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void PlaceCancel(const FInputActionValue& Value);
+
+	/** Shift **/
+	UFUNCTION()
+	void ShiftSelect(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void ShiftCommand(const FInputActionValue& Value);
+
+	/** Alt **/
+	UFUNCTION()
+	void AltSelect(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void AltCommand(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void AltSelectEnd(const FInputActionValue& Value);
+
+	/** Ctrl **/
+	UFUNCTION()
+	void CtrlSelect(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void CtrlSelectEnd(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void CtrlCommand(const FInputActionValue& Value);
 };
+

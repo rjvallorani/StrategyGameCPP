@@ -3,10 +3,16 @@
 
 #include "SPlayerController.h"
 #include "EnhancedInputSubsystems.h"
+#include "FormationDataAsset.h"
+#include "HudWidget.h"
 #include "PlacementPreview.h"
 #include "RTSGameCharacter.h"
 #include "Selectable.h"
+#include "Blueprint/UserWidget.h"
+#include "Developer/ShaderCompilerCommon/Private/HlslLexer.h"
+#include "Engine/AssetManager.h"
 #include "Net/UnrealNetwork.h"
+#include "Runtime/VirtualFileCache/Private/VirtualFileCacheInternal.h"
 
 ASPlayerController::ASPlayerController(const FObjectInitializer& ObjectInitializer)
 {
@@ -43,6 +49,16 @@ void ASPlayerController::Handle_Selection(TArray<AActor*> ActorsToSelect)
 {
 	Server_Select_Group(ActorsToSelect);
 }
+
+
+void ASPlayerController::Handle_DeSelection(AActor* ActorToSelect)
+{
+}
+
+void ASPlayerController::Handle_DeSelection(TArray<AActor*> ActorsToSelect)
+{
+}
+
 
 FVector ASPlayerController::GetMousePositionOnTerrain() const
 {
@@ -89,11 +105,19 @@ void ASPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
+	verify((AssetManager = UAssetManager::GetIfInitialized()) !=nullptr);
+
 	// Sets cursor to remain on screen after selecting
 	FInputModeGameAndUI InputMode;
 	InputMode.SetHideCursorDuringCapture(false);
 	SetInputMode(InputMode);
 	bShowMouseCursor = true;
+
+	// Create Formation Data
+	CreateFormationData();
+	
+	// Create Hud
+	CreateHUD();
 }
 
 bool ASPlayerController::ActorSelected(AActor* ActorToCheck) const
@@ -122,18 +146,14 @@ void ASPlayerController::Server_Select_Group_Implementation(const TArray<AActor*
 			}
 		}
 	}
-	for (int j = 0; j < ValidActors.Num(); ++j)
-	{
-		Selected.Append(ValidActors);
-		OnRep_Selected();
-	}
+	
+	Selected.Append(ValidActors);
+	OnRep_Selected();
 	ValidActors.Empty();
 }
 
 void ASPlayerController::Server_Select_Implementation(AActor* ActorToSelect)
 {
-	Server_ClearSelected();
-
 	if (ActorToSelect)
 	{
 		if (ISelectable* Selectable = Cast<ISelectable>(ActorToSelect))
@@ -176,9 +196,156 @@ void ASPlayerController::Server_ClearSelected_Implementation()
 	OnRep_Selected();
 }
 
+void ASPlayerController::Server_DeSelect_Group_Implementation(const TArray<AActor*>& ActorsToDeSelect)
+{
+	for (int i = 0; i  < ActorsToDeSelect.Num(); ++i)
+	{
+		if (ActorsToDeSelect[i])
+		{
+			for (int j = Selected.Num() - 1; j >=0; --j)
+			{
+				if (ActorsToDeSelect[i] == Selected[j])
+				{
+					if (ISelectable* Selectable = Cast<ISelectable>(ActorsToDeSelect[i]))
+					{
+						Selectable->DeSelect();
+						Selected.RemoveAt(j);
+						break;
+					}
+				}
+			}
+		}
+	}
+	OnRep_Selected();
+}
+
 void ASPlayerController::OnRep_Selected()
 {
 	OnSelectedUpdated.Broadcast();
+}
+
+void ASPlayerController::CommandSelected(FCommandData CommandData)
+{
+	Server_CommandSelected(CommandData);
+}
+
+void ASPlayerController::UpdateFormation(const EFormation Formation)
+{
+	CurrentFormation = Formation;
+
+	if (HasGroupSelection() && Selected.IsValidIndex(0))
+	{
+		CommandSelected(FCommandData(Selected[0]->GetActorLocation(), Selected[0]->GetActorRotation(), ECommandType::CommandMove));
+	}
+}
+
+void ASPlayerController::UpdateSpacing(const float NewSpacing)
+{
+	FormationSpacing = NewSpacing;
+
+	if (HasGroupSelection() && Selected.IsValidIndex(0))
+	{
+		CommandSelected(FCommandData(Selected[0]->GetActorLocation(), Selected[0]->GetActorRotation(), ECommandType::CommandMove));
+	}
+}
+
+void ASPlayerController::CreateFormationData()
+{
+	const FPrimaryAssetType AssetType("FormationData");
+	TArray<FPrimaryAssetId> Formations;
+	AssetManager->GetPrimaryAssetIdList(AssetType, Formations);
+
+	if (Formations.Num() > 0)
+	{
+		const TArray<FName> Bundles;
+		const FStreamableDelegate FormationDataLoadedDelegate = FStreamableDelegate::CreateUObject(this, &ASPlayerController::OnFormationDataLoaded, Formations);
+		AssetManager->LoadPrimaryAssets(Formations, Bundles, FormationDataLoadedDelegate);
+	}
+}
+
+void ASPlayerController::OnFormationDataLoaded(TArray<FPrimaryAssetId> Formations)
+{
+	for (int i = 0; i < Formations.Num(); ++i)
+	{
+		if (UFormationDataAsset* FormationDataAsset = Cast<UFormationDataAsset>(AssetManager->GetPrimaryAssetObject(Formations[i])))
+		{
+			FormationData.Add(FormationDataAsset);
+		}
+	}
+}
+
+UFormationDataAsset* ASPlayerController::GetFormationData()
+{
+	for (int i = 0; i < FormationData.Num(); ++i)
+	{
+		if (FormationData[i]->FormationType == CurrentFormation)
+		{
+			return FormationData[i];
+		}
+	}
+
+	return nullptr;
+}
+
+void ASPlayerController::CalculateOffset(const int Index, FCommandData& CommandData)
+{
+	if (FormationData.Num() <= 0)
+	{
+		return;
+	}
+
+	if (const UFormationDataAsset* CurrentFormationData = GetFormationData())
+	{
+		FVector Offset = CurrentFormationData->Offset;
+
+		switch (CurrentFormationData->FormationType)
+		{
+		case EFormation::Blob:
+			{
+				break;
+			}
+			default:
+			{
+				if (CurrentFormationData->Alternate)
+				{
+					// Alternate the side the position will be on
+					if (Index % 2 == 0)
+					{
+						// even
+						Offset.Y = Offset.Y * -1;
+					}
+
+					// Allow two positions on each row, using the alternate position
+					Offset *= (FMath::Floor((Index + 1) / 2)) * FormationSpacing;
+				}
+				else
+				{
+					// Calculate a normal offset
+					Offset *= Index * FormationSpacing;
+				}
+			}
+		}
+
+		Offset = CommandData.Rotation.RotateVector(Offset);
+		CommandData.Location = CommandData.SourceLocation + Offset;
+	}
+}
+
+void ASPlayerController::Server_CommandSelected_Implementation(FCommandData CommandData)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	for (int i = 0; i < Selected.Num(); ++i)
+	{
+		if (ARTSGameCharacter* SelectedCharacter = Cast<ARTSGameCharacter>(Selected[i]))
+		{
+			CalculateOffset(i, CommandData);
+			SelectedCharacter->CommandMoveToLocation(CommandData);
+		}
+	}
 }
 
 /** Enhanced Input **/
@@ -240,6 +407,63 @@ void ASPlayerController::SetInputPlacement(const bool Enabled) const
 			SetInputDefault();
 		}
 	}
+}
+
+void ASPlayerController::SetInputShift(const bool Enabled) const
+{
+	ensureMsgf(PlayerActionsAsset, TEXT("PlayerActionsAsset is NULL!"));
+	
+	if (const UPlayerInputActions* PlayerActions = Cast<UPlayerInputActions>(PlayerActionsAsset))
+	{
+		ensure(PlayerActions->MappingContextShift);
+
+		if (Enabled)
+		{
+			AddInputMapping(PlayerActions->MappingContextShift, PlayerActions->MapPriorityShift);
+		}
+		else
+		{
+			RemoveInputMapping(PlayerActions->MappingContextShift);
+		}
+	}
+}
+
+void ASPlayerController::SetInputAlt(const bool Enabled) const
+{
+	ensureMsgf(PlayerActionsAsset, TEXT("PlayerActionsAsset is NULL!"));
+	
+	if (const UPlayerInputActions* PlayerActions = Cast<UPlayerInputActions>(PlayerActionsAsset))
+	{
+		ensure(PlayerActions->MappingContextAlt);
+
+		if (Enabled)
+		{
+			AddInputMapping(PlayerActions->MappingContextAlt, PlayerActions->MapPriorityAlt);
+		}
+		else
+		{
+			RemoveInputMapping(PlayerActions->MappingContextAlt);
+		}
+	}	
+}
+
+void ASPlayerController::SetInputCtrl(const bool Enabled) const
+{
+	ensureMsgf(PlayerActionsAsset, TEXT("PlayerActionsAsset is NULL!"));
+	
+	if (const UPlayerInputActions* PlayerActions = Cast<UPlayerInputActions>(PlayerActionsAsset))
+	{
+		ensure(PlayerActions->MappingContextCtrl);
+
+		if (Enabled)
+		{
+			AddInputMapping(PlayerActions->MappingContextCtrl, PlayerActions->MapPriorityCtrl);
+		}
+		else
+		{
+			RemoveInputMapping(PlayerActions->MappingContextCtrl);
+		}
+	}	
 }
 
 void ASPlayerController::SetupInputComponent()
@@ -317,6 +541,18 @@ void ASPlayerController::UpdatePlacement() const
 
 	// Update placeable actor position with mouse position (on tick)
 	PlacementPreviewActor->SetActorLocation(GetMousePositionOnSurface());
+}
+
+void ASPlayerController::CreateHUD()
+{
+	if (HudClass)
+	{
+		HUD = CreateWidget<UHudWidget>(GetWorld(), HudClass);
+		if (HUD != nullptr)
+		{
+			HUD->AddToViewport();
+		}
+	}
 }
 
 

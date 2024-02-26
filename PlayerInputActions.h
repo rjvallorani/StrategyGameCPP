@@ -43,6 +43,22 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Default")
 	UInputAction* TestPlacement;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Default")
+	UInputAction* SelectDoubleTap;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Default")
+	UInputAction* Command;
+	
+	/* Modifier keys */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Modifier")
+	UInputAction* Shift;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Modifier")
+	UInputAction* Alt;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Modifier")
+	UInputAction* Ctrl;
+	
 	/* Placement mapping context */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Placement")
 	const UInputMappingContext* MappingContextPlacement;
@@ -55,6 +71,50 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Placement")
 	UInputAction* PlaceCancel;
+
+
+	/* Shift Mapping Context */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Shift")
+	UInputMappingContext* MappingContextShift;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Shift")
+	int32 MapPriorityShift;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Shift")
+	UInputAction* ShiftSelect;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Shift")
+	UInputAction* ShiftCommand;
+
+
+	/* Alt Mapping Context */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Alt")
+	UInputMappingContext* MappingContextAlt;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Alt")
+	int32 MapPriorityAlt;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Alt")
+	UInputAction* AltSelect;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Alt")
+	UInputAction* AltCommand;
+
+
+	/* Ctrl Mapping Context */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Ctrl")
+	UInputMappingContext* MappingContextCtrl;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Ctrl")
+	int32 MapPriorityCtrl;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Ctrl")
+	UInputAction* CtrlSelect;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category= "Ctrl")
+	UInputAction* CtrlCommand;
+
+	
 };
 
 namespace EPlayerInputActions
@@ -85,5 +145,19 @@ namespace EPlayerInputActions
 			Input->BindAction(Action, ETriggerEvent::Completed, Obj, CompleteFunc);
 		}
 	}
+	template<class T, class FuncType>
+	void BindInput_Simple(UEnhancedInputComponent* Input, const UInputAction* Action, T* Obj, FuncType TriggerFunc, FuncType CompleteFunc)
+	{
+		if (TriggerFunc != nullptr)
+		{
+			Input->BindAction(Action, ETriggerEvent::Started, Obj, TriggerFunc);
+		}
+
+		if (CompleteFunc != nullptr)
+		{
+			Input->BindAction(Action, ETriggerEvent::Completed, Obj, CompleteFunc);
+		}
+	}
+	
 	
 }

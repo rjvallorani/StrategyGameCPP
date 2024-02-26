@@ -1,12 +1,17 @@
+// ReSharper disable once UnrealHeaderToolError
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
 #include "CoreMinimal.h"
+#include "AIData.h"
+#include "FormationDataAsset.h"
 #include "PlayerInputActions.h"
 #include "GameFramework/PlayerController.h"
 #include "SPlayerController.generated.h"
 
+
+class UHudWidget;
 class UInputMappingContext;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FSelectedUpdateDelegate);
 
@@ -27,12 +32,22 @@ public:
 	void Handle_Selection(TArray<AActor*> ActorsToSelect);
 
 	UFUNCTION()
+	void Handle_DeSelection(AActor* ActorToSelect);
+	void Handle_DeSelection(TArray<AActor*> ActorsToSelect);
+	
+	UFUNCTION()
 	FVector GetMousePositionOnTerrain() const;
 
 	UFUNCTION()
 	FVector GetMousePositionOnSurface() const;
 
 	virtual void Tick(float DeltaSeconds) override;
+
+	UFUNCTION()
+	bool HasGroupSelection() const { return Selected.Num() > 1; }
+	
+	UPROPERTY()
+	FSelectedUpdateDelegate OnSelectedUpdated;
 
 protected:
 	virtual void BeginPlay() override;
@@ -50,6 +65,9 @@ protected:
 	void Server_DeSelect(AActor* ActorToDeSelect);
 
 	UFUNCTION(Server, Reliable)
+	void Server_DeSelect_Group(const TArray<AActor*>& ActorsToDeSelect);
+
+	UFUNCTION(Server, Reliable)
 	void Server_ClearSelected();
 
 	UFUNCTION()
@@ -58,8 +76,48 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_Selected)
 	TArray<AActor*> Selected;
 
+
+	/* Command Functions */
+public:
+	UFUNCTION()
+	void CommandSelected(FCommandData CommandData);
+	
+	UFUNCTION()
+	void UpdateFormation(const EFormation Formation); 
+
+	UFUNCTION()
+	void UpdateSpacing(const float NewSpacing); 
+
+protected:
+	UFUNCTION(Server, Reliable)
+	void Server_CommandSelected(FCommandData CommandData);
+
+	UFUNCTION()
+	void CreateFormationData();
+
+	UFUNCTION()
+	void OnFormationDataLoaded(TArray<FPrimaryAssetId> Formations);
+
+	UFUNCTION()
+	UFormationDataAsset* GetFormationData();
+
+	UFUNCTION()
+	void CalculateOffset(const int Index, FCommandData& CommandData);
+
 	UPROPERTY()
-	FSelectedUpdateDelegate OnSelectedUpdated;
+	TEnumAsByte<EFormation> CurrentFormation;
+
+	UPROPERTY()
+	float FormationSpacing;
+
+	UPROPERTY()
+	UAssetManager* AssetManager;
+
+	UPROPERTY()
+	TArray<UFormationDataAsset*> FormationData;
+
+
+	/* End Command Functions */
 
 	/* Enhanced Input */
 public:
@@ -74,6 +132,15 @@ public:
 
 	UFUNCTION()
 	void SetInputPlacement(const bool Enabled = true) const;
+
+	UFUNCTION()
+	void SetInputShift(const bool Enabled = true) const;
+
+	UFUNCTION()
+	void SetInputAlt(const bool Enabled = true) const;
+
+	UFUNCTION()
+	void SetInputCtrl(const bool Enabled = true) const;
 
 	UFUNCTION()
 	UDataAsset* GetInputActionAsset() const { return PlayerActionsAsset; }
@@ -116,6 +183,16 @@ protected:
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Placeable")
 	TSubclassOf<AActor> PreviewActorType;
-	
-	
+
+/* UI */
+public:
+	UFUNCTION()
+	void CreateHUD();
+
+protected:
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category= "Settings |UI")
+	TSubclassOf<UUserWidget> HudClass;
+
+	UPROPERTY()
+	UHudWidget* HUD;
 };
